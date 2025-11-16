@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>English Quiz V48</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <style>
+    /* Reset & Base */
+    html,body{margin:0;padding:0;font-family:sans-serif;background:#f6f6fb;}
+    *{box-sizing:border-box;}
+    :root{
+      --main:#2846c6;--accent:#55e3b9;--error:#e74c3c;--success:#27ae60;
+      --legendary:#ffd700;--legendary-glow:0 0 12px #ffd70088;
+    }
+    body{min-height:100vh;}
+    a{color:var(--main);text-decoration:none;}
+    .hidden{display:none!important;}
+    .canvas{max-width:480px;margin:32px auto;padding:24px;background:white;border-radius:16px;box-shadow:0 2px 24px #22306418;}
+    h1,h2,h3{margin:0 0 16px;}
+    .btn{padding:10px 24px;border-radius:24px;border:none;cursor:pointer;background:var(--main);color:#fff;font-weight:600;transition:0.2s;}
+    .btn:hover{background:var(--accent);color:#222;}
+    .input{width:100%;padding:10px;margin-bottom:12px;border:1px solid #dde;border-radius:6px;}
+    .options button{margin:8px 0;display:block;width:100%;}
+    .feedback{font-weight:600;margin:12px 0;}
+    .feedback.success{color:var(--success);}
+    .feedback.error{color:var(--error);}
+    .timer{font-size:1.1em;font-weight:600;margin-bottom:12px;}
+    .alert{color:var(--error);}
+    .nav{display:flex;gap:16px;justify-content:center;margin-bottom:24px;}
+    .nav .active{font-weight:700;color:var(--accent);}
+    .level{font-weight:700;}
+    .legendary{color:var(--legendary);text-shadow:var(--legendary-glow);}
+    .admin-panel{background:#f7fafb;padding:16px;border-radius:8px;margin-top:24px;}
+    .export-area{width:100%;height:120px;}
+    .topic-rec{background:#eafcec;padding:8px;border-radius:6px;margin:4px 0;}
+    .top3{margin:12px 0;}
+    /* Responsive */
+    @media(max-width:520px){.canvas{max-width:100vw;padding:8vw;}}
+  </style>
+</head>
+<body>
+<div class="canvas">
+  <div id="nav"></div>
+  <div id="app"></div>
+</div>
+<script>
+/* ---- Seed: Currículo + Exemplos ---- */
+const curriculum = [
+  {level:'7º',topics:[
+    {name:'Simple Present',example:'She plays tennis.'},
+    {name:'Present Continuous',example:'I am studying.'},
+    {name:'Question Words',example:'Where do you live?'},
+    {name:'Prepositions',example:'The cat is on the table.'},
+    {name:'Describing People',example:'He is tall and kind.'}
+  ]},
+  {level:'8º',topics:[
+    {name:'Past Simple',example:'They visited London.'},
+    {name:'Past Continuous',example:'She was reading.'},
+    {name:'Comparatives',example:'This book is better.'},
+    {name:'Going to (Future)',example:'I am going to travel.'},
+    {name:'Modals',example:'You should study.'}
+  ]},
+  {level:'9º',topics:[
+    {name:'Present Perfect',example:'I have finished.'},
+    {name:'Passive Voice',example:'The cake was eaten.'},
+    {name:'Adverbs',example:'She speaks fluently.'},
+    {name:'Conditionals',example:'If it rains, we stay.'},
+    {name:'Reported Speech',example:'He said he was tired.'}
+  ]},
+  {level:'1º EM',topics:[
+    {name:'Future Simple',example:'I will go.'},
+    {name:'Relative Clauses',example:'The man who called.'},
+    {name:'Gerunds & Infinitives',example:'I like swimming.'},
+    {name:'Wish/If only',example:'I wish I were there.'}
+  ]},
+  {level:'2º EM',topics:[
+    {name:'Advanced Modals',example:'She must have left.'},
+    {name:'Phrasal Verbs',example:'Look after the kids.'},
+    {name:'Formal/Informal',example:'Would you mind...?'},
+    {name:'Linking Words',example:'Although, however, therefore.'}
+  ]}
+];
+
+/* ---- Seed: Perguntas ---- */
+let questionBank = [
+  {topic:'Simple Present',q:'Which sentence is correct?',opts:['She play tennis.','She plays tennis.','She playing tennis.'],a:1},
+  {topic:'Prepositions',q:'Where is the cat?',opts:['On the table.','In the table.','At the table.'],a:0},
+  {topic:'Past Simple',q:'Choose the past form:',opts:['Visit','Visited','Visits'],a:1},
+  {topic:'Comparatives',q:'Which is correct?',opts:['More better','Better','More good'],a:1},
+  {topic:'Passive Voice',q:'Transform: "He eats the cake."',opts:['The cake is eaten by him.','He is eaten the cake.','The cake eats him.'],a:0},
+  {topic:'Conditionals',q:'If it rains, we ___ at home.',opts:['stays','stay','will stay'],a:2},
+  {topic:'Reported Speech',q:'Change: "I am tired.", he said.',opts:['He said he is tired.','He said he was tired.','He said he will tired.'],a:1},
+];
+
+/* ---- User Store ---- */
+let users = [
+  {user:'admin',pass:'admin',role:'admin',score:25000,level:6,history:[],streak:0}
+];
+let currentUser = null;
+
+/* ---- State ---- */
+let route = 'login'; // login | register | home | quiz | results | admin
+let quiz = {idx:0,score:0,answers:[],start:0,streak:0,bonus:0,mode:'normal',topic:'',timer:0};
+let timerInterval = null;
+
+/* ---- Navigation ---- */
+const navLinks = [
+  {r:'home',label:'Home'},
+  {r:'quiz',label:'Quiz'},
+  {r:'results',label:'Resultados'},
+  {r:'admin',label:'Admin',admin:true}
+];
+function renderNav() {
+  let nav = '<div class="nav">';
+  if(currentUser) {
+    navLinks.forEach(l=>{
+      if(l.admin && currentUser.role!=='admin') return;
+      nav += `<a href="#" ${route===l.r?'class="active"':''} onclick="goTo('${l.r}')">${l.label}</a>`;
+    });
+    nav += `<a href="#" onclick="logout()">Sair</a>`;
+  }
+  nav += '</div>';
+  document.getElementById('nav').innerHTML = nav;
+}
+
+/* ---- Routing ---- */
+function goTo(r) {
+  route = r;
+  if(r==='quiz') startQuiz();
+  if(r==='results') renderResults();
+  if(r==='admin') renderAdmin();
+  renderNav();
+  renderApp();
+}
+function logout() {
+  currentUser=null; route='login';
+  renderNav(); renderApp();
+}
+
+/* ---- Helper: Level ---- */
+function calcLevel(score) {
+  if(score>=20000) return {lvl:'👑 LEGENDARY',idx:7};
+  if(score>=12000) return {lvl:'6',idx:6};
+  if(score>=8000) return {lvl:'5',idx:5};
+  if(score>=5000) return {lvl:'4',idx:4};
+  if(score>=3000) return {lvl:'3',idx:3};
+  if(score>=1500) return {lvl:'2',idx:2};
+  if(score>=500) return {lvl:'1',idx:1};
+  return {lvl:'0',idx:0};
+}
+
+/* ---- Login/Register ---- */
+function renderLogin() {
+  document.getElementById('app').innerHTML = `
+    <h2>Login</h2>
+    <input class="input" id="login_user" placeholder="Usuário">
+    <input class="input" id="login_pass" type="password" placeholder="Senha">
+    <button class="btn" onclick="doLogin()">Entrar</button>
+    <div style="margin:16px 0">ou <a href="#" onclick="route='register';renderApp()">registrar</a></div>
+  `;
+}
+function renderRegister() {
+  document.getElementById('app').innerHTML = `
+    <h2>Registro</h2>
+    <input class="input" id="reg_user" placeholder="Usuário">
+    <input class="input" id="reg_pass" type="password" placeholder="Senha">
+    <button class="btn" onclick="doRegister()">Criar Conta</button>
+    <div style="margin:16px 0">já tem conta? <a href="#" onclick="route='login';renderApp()">Entrar</a></div>
+  `;
+}
+function doLogin() {
+  let u=document.getElementById('login_user').value.trim();
+  let p=document.getElementById('login_pass').value;
+  let found=users.find(x=>x.user===u&&x.pass===p);
+  if(found) {
+    currentUser=found;
+    route='home'; renderNav(); renderApp();
+  } else {
+    alert('Usuário ou senha inválido!');
+  }
+}
+function doRegister() {
+  let u=document.getElementById('reg_user').value.trim();
+  let p=document.getElementById('reg_pass').value;
+  if(users.find(x=>x.user===u)) {alert('Usuário já existe!');return;}
+  if(u.length<3||p.length<3){alert('Mín. 3 caracteres');return;}
+  let newU={user:u,pass:p,role:'user',score:0,level:0,history:[],streak:0};
+  users.push(newU); currentUser=newU;
+  route='home'; renderNav(); renderApp();
+}
+
+/* ---- Home ---- */
+function renderHome() {
+  let {lvl,idx}=calcLevel(currentUser.score);
+  let legendary = idx===7 ? 'legendary' : '';
+  let streak = currentUser.streak>1 ? `🔥 Streak: ${currentUser.streak}` : '';
+  let top3 = getTop3Topics(currentUser);
+  let html = `
+    <h2>Bem-vindo, ${currentUser.user}!</h2>
+    <div>Pontuação: <b>${currentUser.score}</b> | Nível: <span class="level ${legendary}">${lvl}</span> ${idx===7?'<span title="Legendary" class="legendary">👑</span>':''}</div>
+    <div style="margin:6px 0">${streak}</div>
+    <button class="btn" onclick="goTo('quiz')">Jogar Quiz</button>
+    <div style="margin:18px 0 4px"><b>Seu progresso:</b></div>
+    <progress max="20000" value="${Math.min(currentUser.score,20000)}" style="width:100%;height:10px"></progress>
+    <div class="top3"><b>Tópicos mais desafiadores:</b>
+      ${top3.map(t=>`<div class="topic-rec">${t.topic} <small>(${t.errors} erros)</small></div>`).join('')}
+    </div>
+  `;
+  document.getElementById('app').innerHTML=html;
+}
+
+/* ---- IA Recomendação: Top 3 Erros ---- */
+function getTop3Topics(user) {
+  let byTopic = {};
+  (user.history||[]).forEach(h=>{
+    if(!byTopic[h.topic]) byTopic[h.topic]=0;
+    if(!h.correct) byTopic[h.topic]++;
+  });
+  let arr = Object.keys(byTopic).map(k=>({topic:k,errors:byTopic[k]})).sort((a,b)=>b.errors-a.errors);
+  return arr.slice(0,3);
+}
+
+/* ---- Quiz ---- */
+function startQuiz() {
+  quiz.idx=0; quiz.score=0; quiz.answers=[]; quiz.streak=0; quiz.mode='normal'; quiz.start=Date.now();
+  quiz.questions = shuffle([...questionBank]);
+  quiz.timer=15; // segundos
+  renderQuiz();
+  timerInterval = setInterval(updateTimer,1000);
+}
+
+function updateTimer() {
+  quiz.timer--;
+  if(quiz.timer<=0){
+    checkAnswer(-1);
+  }
+  renderQuiz();
+}
+
+function renderQuiz() {
+  let q = quiz.questions[quiz.idx];
+  if(!q){clearInterval(timerInterval);route='results';goTo('results');return;}
+  let opts = q.opts.map((o,i)=>`<button class="btn opt" onclick="checkAnswer(${i})">${o}</button>`).join('');
+  let feedback = quiz.answers[quiz.idx]!=null?(
+    quiz.answers[quiz.idx]==q.a?'<div class="feedback success">Correto!</div>':'<div class="feedback error">Errado!</div>'
+  ):'';
+  let timerTxt = `<div class="timer${quiz.timer<=4?' alert':''}">Tempo: ${quiz.timer}s</div>`;
+  let streakTxt = quiz.streak>1 ? `<div style="color:var(--success)">Streak: ${quiz.streak}</div>` : '';
+  let html = `
+    <h2>Quiz (${quiz.idx+1}/${quiz.questions.length})</h2>
+    ${timerTxt}
+    <div><b>${q.topic}:</b> ${q.q}</div>
+    <div class="options">${opts}</div>
+    ${feedback}
+    ${streakTxt}
+  `;
+  document.getElementById('app').innerHTML=html;
+}
+
+function checkAnswer(selected){
+  let q = quiz.questions[quiz.idx];
+  if(quiz.answers[quiz.idx]!=null) return; // já respondeu
+  let correct = selected===q.a;
+  quiz.answers[quiz.idx]=selected;
+  let base = 10, bonus=0, streakB=0;
+  // Bônus de velocidade (até +15)
+  if(correct){
+    bonus = Math.max(0, 15-(15-quiz.timer));
+    quiz.streak++;
+    streakB = quiz.streak-1; // +1 por streak acima de 1
+  } else {
+    quiz.streak=0;
+  }
+  // Multiplicador por modo
+  let mult = 1;
+  if(quiz.mode==='competition') mult=2;
+  if(quiz.mode==='reading') mult=1.5;
+  let pts = correct ? Math.round((base+bonus+streakB)*mult) : 0;
+  quiz.score += pts;
+  quiz.questions[quiz.idx].lastPts=pts;
+  // Atualiza histórico do usuário
+  currentUser.history.push({topic:q.topic,correct,pts,ts:Date.now()});
+  setTimeout(()=>{
+    quiz.idx++; quiz.timer=15; renderQuiz();
+  },800);
+  renderQuiz();
+}
+
+/* ---- Results ---- */
+function renderResults() {
+  let {score,questions}=quiz;
+  let html = `
+    <h2>Resultados</h2>
+    <div>Pontuação nessa rodada: <b>${score}</b></div>
+    <div>
+      <ul>
+        ${questions.map((q,i)=>`
+          <li>
+            <b>${q.topic}:</b> ${q.q} <br>
+            Sua resposta: ${typeof quiz.answers[i]==='number'?q.opts[quiz.answers[i]]:'(tempo esgotado)'}
+            <span class="${quiz.answers[i]===q.a?'success':'error'}">
+              ${quiz.answers[i]===q.a?'✔️':'❌'}
+            </span>
+            <span>+${q.lastPts||0} pts</span>
+          </li>
+        `).join('')}
+      </ul>
+    </div>
+    <button class="btn" onclick="goTo('quiz')">Jogar Novamente</button>
+    <button class="btn" onclick="goTo('home')">Voltar</button>
+  `;
+  // Atualiza pontuação e nível
+  currentUser.score += score;
+  let {lvl,idx}=calcLevel(currentUser.score);
+  currentUser.level=idx;
+  if(idx===7) html += `<div class="legendary" style="font-size:2em;margin:16px 0">👑 LEGENDARY!</div>`;
+  document.getElementById('app').innerHTML = html;
+}
+
+/* ---- Admin Panel ---- */
+function renderAdmin() {
+  let html = `
+    <h2>Painel Admin</h2>
+    <div class="admin-panel">
+      <div>
+        <h3>Criar Pergunta</h3>
+        <select id="topic_sel" class="input">
+          ${curriculum.flatMap(l=>l.topics).map(t=>`<option>${t.name}</option>`).join('')}
+        </select>
+        <input class="input" id="q_text" placeholder="Pergunta">
+        <input class="input" id="opt1" placeholder="Opção 1">
+        <input class="input" id="opt2" placeholder="Opção 2">
+        <input class="input" id="opt3" placeholder="Opção 3">
+        <input class="input" id="ans_idx" type="number" min="0" max="2" value="0" style="width:80px">
+        <button class="btn" onclick="addQuestion()">Adicionar</button>
+      </div>
+      <div>
+        <h3>Banco de Perguntas</h3>
+        <ul>
+          ${questionBank.map((q,i)=>`
+            <li>
+              <b>${q.topic}</b>: ${q.q}
+              [${q.opts.map((o,j)=>j===q.a?'<b>'+o+'</b>':o).join(' / ')}]
+              <button onclick="delQuestion(${i})">🗑️</button>
+            </li>
+          `).join('')}
+        </ul>
+        <button class="btn" onclick="exportJSON()">Exportar JSON</button>
+        <button class="btn" onclick="importJSON()">Importar JSON</button>
+        <button class="btn" onclick="resetBank()">Resetar Banco</button>
+      </div>
+      <div>
+        <h3>Export/Import JSON</h3>
+        <textarea class="export-area" id="export_area"></textarea>
+      </div>
+    </div>
+  `;
+  document.getElementById('app').innerHTML=html;
+}
+
+/* ---- Admin: Banco de Perguntas ---- */
+function addQuestion(){
+  let topic=document.getElementById('topic_sel').value;
+  let q=document.getElementById('q_text').value;
+  let o1=document.getElementById('opt1').value;
+  let o2=document.getElementById('opt2').value;
+  let o3=document.getElementById('opt3').value;
+  let a=parseInt(document.getElementById('ans_idx').value);
+  if(!q||!o1||!o2||!o3||isNaN(a)){alert('Preencha tudo!');return;}
+  questionBank.push({topic,q,opts:[o1,o2,o3],a});
+  renderAdmin();
+}
+function delQuestion(idx){
+  if(confirm('Excluir pergunta?')){questionBank.splice(idx,1);renderAdmin();}
+}
+function exportJSON(){
+  document.getElementById('export_area').value = JSON.stringify(questionBank,null,2);
+}
+function importJSON(){
+  let val=document.getElementById('export_area').value;
+  try{
+    let arr=JSON.parse(val);
+    if(Array.isArray(arr)){questionBank=arr;renderAdmin();}
+    else alert('JSON inválido');
+  }catch(e){alert('Erro de JSON');}
+}
+function resetBank(){
+  if(confirm('Resetar banco para padrão?')){
+    questionBank=[
+      {topic:'Simple Present',q:'Which sentence is correct?',opts:['She play tennis.','She plays tennis.','She playing tennis.'],a:1},
+      {topic:'Prepositions',q:'Where is the cat?',opts:['On the table.','In the table.','At the table.'],a:0},
+      {topic:'Past Simple',q:'Choose the past form:',opts:['Visit','Visited','Visits'],a:1},
+      {topic:'Comparatives',q:'Which is correct?',opts:['More better','Better','More good'],a:1},
+      {topic:'Passive Voice',q:'Transform: "He eats the cake."',opts:['The cake is eaten by him.','He is eaten the cake.','The cake eats him.'],a:0},
+      {topic:'Conditionals',q:'If it rains, we ___ at home.',opts:['stays','stay','will stay'],a:2},
+      {topic:'Reported Speech',q:'Change: "I am tired.", he said.',opts:['He said he is tired.','He said he was tired.','He said he will tired.'],a:1},
+    ];
+    renderAdmin();
+  }
+}
+
+/* ---- Utils ---- */
+function shuffle(arr) {
+  let a=[...arr]; for(let i=a.length-1;i>0;i--){
+    let j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  } return a;
+}
+
+/* ---- Initial Render ---- */
+function renderApp() {
+  if(!currentUser){
+    route==='register'?renderRegister():renderLogin();
+    return;
+  }
+  switch(route){
+    case 'home': renderHome(); break;
+    case 'quiz': renderQuiz(); break;
+    case 'results': renderResults(); break;
+    case 'admin': renderAdmin(); break;
+    default: renderHome();
+  }
+}
+renderNav(); renderApp();
+</script>
+</body>
+</html>
